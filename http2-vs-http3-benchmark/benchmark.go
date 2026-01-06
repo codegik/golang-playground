@@ -49,9 +49,15 @@ func (b *Benchmark) createHTTP2Client() *http.Client {
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
-			ForceAttemptHTTP2: true,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          10,
+			MaxIdleConnsPerHost:   10,
+			MaxConnsPerHost:       100,
+			IdleConnTimeout:       30 * time.Second,
+			DisableCompression:    false,
+			ResponseHeaderTimeout: 10 * time.Second,
 		},
-		Timeout: 30 * time.Second,
+		Timeout: 60 * time.Second,
 	}
 }
 
@@ -60,12 +66,20 @@ func (b *Benchmark) createHTTP3Client() *http.Client {
 		Transport: &http3.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
+				NextProtos:         []string{"h3"},
 			},
 			QUICConfig: &quic.Config{
-				MaxIdleTimeout: 30 * time.Second,
+				MaxIdleTimeout:                30 * time.Second,
+				MaxIncomingStreams:            1000,
+				MaxIncomingUniStreams:         1000,
+				EnableDatagrams:               true,
+				Allow0RTT:                     true,
+				MaxStreamReceiveWindow:        6 * 1024 * 1024,
+				MaxConnectionReceiveWindow:    15 * 1024 * 1024,
 			},
+			DisableCompression: false,
 		},
-		Timeout: 30 * time.Second,
+		Timeout: 60 * time.Second,
 	}
 }
 
@@ -83,9 +97,11 @@ func (b *Benchmark) RunAll() []BenchmarkResult {
 		fn   func() []BenchmarkResult
 	}{
 		{"Single Request Latency", b.benchmarkSingleRequest},
-		{"Concurrent Requests", b.benchmarkConcurrentRequests},
+		{"High Concurrency (50 concurrent)", b.benchmarkHighConcurrency},
+		{"Very High Concurrency (100 concurrent)", b.benchmarkVeryHighConcurrency},
+		{"Massive Small Requests (2000x1KB)", b.benchmarkMassiveSmallRequests},
+		{"Simulated Network Latency (50ms)", b.benchmarkWithLatency},
 		{"Large File Download", b.benchmarkLargeFile},
-		{"Many Small Requests", b.benchmarkManySmallRequests},
 		{"Mixed Workload", b.benchmarkMixedWorkload},
 	}
 
@@ -189,6 +205,87 @@ func (b *Benchmark) benchmarkMixedWorkload() []BenchmarkResult {
 	results = append(results, http2Result)
 
 	http3Result := b.runMixedRequests(http3Client, b.http3Port, "HTTP/3", "Mixed Workload")
+	results = append(results, http3Result)
+
+	return results
+}
+
+func (b *Benchmark) benchmarkHighConcurrency() []BenchmarkResult {
+	results := []BenchmarkResult{}
+
+	http2Client := b.createHTTP2Client()
+	http3Client := b.createHTTP3Client()
+
+	iterations := 500
+	concurrency := 50
+
+	http2Result := b.runRequests(http2Client, fmt.Sprintf("https://localhost:%d/json", b.http2Port),
+		"HTTP/2", "High Concurrency (50 concurrent)", iterations, concurrency)
+	results = append(results, http2Result)
+
+	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/json", b.http3Port),
+		"HTTP/3", "High Concurrency (50 concurrent)", iterations, concurrency)
+	results = append(results, http3Result)
+
+	return results
+}
+
+func (b *Benchmark) benchmarkVeryHighConcurrency() []BenchmarkResult {
+	results := []BenchmarkResult{}
+
+	http2Client := b.createHTTP2Client()
+	http3Client := b.createHTTP3Client()
+
+	iterations := 1000
+	concurrency := 100
+
+	http2Result := b.runRequests(http2Client, fmt.Sprintf("https://localhost:%d/json", b.http2Port),
+		"HTTP/2", "Very High Concurrency (100 concurrent)", iterations, concurrency)
+	results = append(results, http2Result)
+
+	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/json", b.http3Port),
+		"HTTP/3", "Very High Concurrency (100 concurrent)", iterations, concurrency)
+	results = append(results, http3Result)
+
+	return results
+}
+
+func (b *Benchmark) benchmarkMassiveSmallRequests() []BenchmarkResult {
+	results := []BenchmarkResult{}
+
+	http2Client := b.createHTTP2Client()
+	http3Client := b.createHTTP3Client()
+
+	iterations := 2000
+	concurrency := 50
+
+	http2Result := b.runRequests(http2Client, fmt.Sprintf("https://localhost:%d/data?size=1024", b.http2Port),
+		"HTTP/2", "Massive Small Requests (2000x1KB)", iterations, concurrency)
+	results = append(results, http2Result)
+
+	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/data?size=1024", b.http3Port),
+		"HTTP/3", "Massive Small Requests (2000x1KB)", iterations, concurrency)
+	results = append(results, http3Result)
+
+	return results
+}
+
+func (b *Benchmark) benchmarkWithLatency() []BenchmarkResult {
+	results := []BenchmarkResult{}
+
+	http2Client := b.createHTTP2Client()
+	http3Client := b.createHTTP3Client()
+
+	iterations := 200
+	concurrency := 20
+	delayMs := 50
+
+	http2Result := b.runRequests(http2Client, fmt.Sprintf("https://localhost:%d/delay?ms=%d", b.http2Port, delayMs),
+		"HTTP/2", "Simulated Network Latency (50ms)", iterations, concurrency)
+	results = append(results, http2Result)
+
+	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/delay?ms=%d", b.http3Port, delayMs),
+		"HTTP/3", "Simulated Network Latency (50ms)", iterations, concurrency)
 	results = append(results, http3Result)
 
 	return results

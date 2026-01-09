@@ -14,21 +14,21 @@ import (
 )
 
 type BenchmarkResult struct {
-	Protocol         string
-	Scenario         string
-	TotalRequests    int
-	SuccessRequests  int
-	FailedRequests   int
-	TotalDuration    time.Duration
-	MinLatency       time.Duration
-	MaxLatency       time.Duration
-	AvgLatency       time.Duration
-	P50Latency       time.Duration
-	P95Latency       time.Duration
-	P99Latency       time.Duration
-	Throughput       float64
-	RequestsPerSec   float64
-	TotalBytesRecv   int64
+	Protocol        string
+	Scenario        string
+	TotalRequests   int
+	SuccessRequests int
+	FailedRequests  int
+	TotalDuration   time.Duration
+	MinLatency      time.Duration
+	MaxLatency      time.Duration
+	AvgLatency      time.Duration
+	P50Latency      time.Duration
+	P95Latency      time.Duration
+	P99Latency      time.Duration
+	Throughput      float64
+	RequestsPerSec  float64
+	TotalBytesRecv  int64
 }
 
 type Benchmark struct {
@@ -69,13 +69,13 @@ func (b *Benchmark) createHTTP3Client() *http.Client {
 				NextProtos:         []string{"h3"},
 			},
 			QUICConfig: &quic.Config{
-				MaxIdleTimeout:                30 * time.Second,
-				MaxIncomingStreams:            1000,
-				MaxIncomingUniStreams:         1000,
-				EnableDatagrams:               true,
-				Allow0RTT:                     true,
-				MaxStreamReceiveWindow:        6 * 1024 * 1024,
-				MaxConnectionReceiveWindow:    15 * 1024 * 1024,
+				MaxIdleTimeout:             30 * time.Second,
+				MaxIncomingStreams:         1000,
+				MaxIncomingUniStreams:      1000,
+				EnableDatagrams:            true,
+				Allow0RTT:                  true,
+				MaxStreamReceiveWindow:     6 * 1024 * 1024,
+				MaxConnectionReceiveWindow: 15 * 1024 * 1024,
 			},
 			DisableCompression: false,
 		},
@@ -170,26 +170,6 @@ func (b *Benchmark) benchmarkLargeFile() []BenchmarkResult {
 
 	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/data?size=%d", b.http3Port, size),
 		"HTTP/3", "Large File (10MB)", iterations, 1)
-	results = append(results, http3Result)
-
-	return results
-}
-
-func (b *Benchmark) benchmarkManySmallRequests() []BenchmarkResult {
-	results := []BenchmarkResult{}
-
-	http2Client := b.createHTTP2Client()
-	http3Client := b.createHTTP3Client()
-
-	iterations := 500
-	concurrency := 20
-
-	http2Result := b.runRequests(http2Client, fmt.Sprintf("https://localhost:%d/data?size=1024", b.http2Port),
-		"HTTP/2", "Many Small Requests (500x1KB)", iterations, concurrency)
-	results = append(results, http2Result)
-
-	http3Result := b.runRequests(http3Client, fmt.Sprintf("https://localhost:%d/data?size=1024", b.http3Port),
-		"HTTP/3", "Many Small Requests (500x1KB)", iterations, concurrency)
 	results = append(results, http3Result)
 
 	return results

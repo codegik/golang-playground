@@ -8,8 +8,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
-	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -25,58 +23,7 @@ func NewHTTP3Server(port int) *HTTP3Server {
 }
 
 func (s *HTTP3Server) Start() error {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
-
-	mux.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
-		sizeStr := r.URL.Query().Get("size")
-		size := 1024
-		if sizeStr != "" {
-			if parsed, err := strconv.Atoi(sizeStr); err == nil {
-				size = parsed
-			}
-		}
-
-		data := make([]byte, size)
-		for i := range data {
-			data[i] = byte(i % 256)
-		}
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Length", strconv.Itoa(size))
-		w.WriteHeader(http.StatusOK)
-		w.Write(data)
-	})
-
-	mux.HandleFunc("/delay", func(w http.ResponseWriter, r *http.Request) {
-		delayStr := r.URL.Query().Get("ms")
-		delayMs := 100
-		if delayStr != "" {
-			if parsed, err := strconv.Atoi(delayStr); err == nil {
-				delayMs = parsed
-			}
-		}
-
-		time.Sleep(time.Duration(delayMs) * time.Millisecond)
-
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("delayed %dms", delayMs)))
-	})
-
-	mux.HandleFunc("/json", func(w http.ResponseWriter, r *http.Request) {
-		response := fmt.Sprintf(`{"timestamp":"%s","server":"http3","status":"ok"}`,
-			time.Now().Format(time.RFC3339))
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(response))
-	})
+	mux := setupHandlers("http3")
 
 	tlsConfig := generateHTTP3TLSConfig()
 
